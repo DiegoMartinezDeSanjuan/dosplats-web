@@ -7,21 +7,37 @@ import { useState } from 'react';
 
 export default function Upload() {
   const { t } = useTranslation('common');
-  const [file, setFile] = useState<File|null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [adminKey, setAdminKey] = useState('');
-  const [status, setStatus] = useState<string|null>(null);
+  const [status, setStatus] = useState<'idle'|'working'|'ok'|'unauthorized'|'error'>('idle');
+  const [errMsg, setErrMsg] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
     setStatus('working');
+    setErrMsg(null);
+
     const fd = new FormData();
     fd.append('file', file);
     fd.append('adminKey', adminKey);
-    const res = await fetch('/api/uploadMenu', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (res.ok) setStatus('ok');
-    else setStatus(data.error || 'error');
+
+    try {
+      const res = await fetch('/api/uploadMenu', { method: 'POST', body: fd });
+      let data: any = {};
+      try { data = await res.json(); } catch {}
+      if (res.ok) {
+        setStatus('ok');
+      } else if (res.status === 401) {
+        setStatus('unauthorized');
+      } else {
+        setStatus('error');
+        setErrMsg(data?.error || `HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      setStatus('error');
+      setErrMsg(err?.message || 'Network error');
+    }
   };
 
   return (
@@ -38,9 +54,13 @@ export default function Upload() {
             {t('admin_key')}
             <input type="password" value={adminKey} onChange={e=>setAdminKey(e.target.value)} required/>
           </label>
-          <button className="button" type="submit">{t('submit')}</button>
+          <button className="button" type="submit" disabled={status==='working'}>
+            {status==='working' ? 'Subiendo…' : t('submit')}
+          </button>
+
           {status==='ok' && <div>{t('success')}</div>}
-          {status && status!=='ok' && status!=='working' && <div>{t('wrong_key')}</div>}
+          {status==='unauthorized' && <div>{t('wrong_key')}</div>}
+          {status==='error' && <div>⚠️ {errMsg}</div>}
         </form>
       </main>
       <Footer />
