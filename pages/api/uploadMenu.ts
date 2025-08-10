@@ -22,23 +22,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     });
 
-    // adminKey puede venir como string o string[]
+    // adminKey puede llegar como string o string[]
     const rawKey = fields?.adminKey;
     const adminKey = Array.isArray(rawKey) ? rawKey[0] : (rawKey ?? '');
     if (adminKey !== ADMIN_UPLOAD_KEY) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // file puede venir como File o File[]
+    // file puede llegar como File o File[]
     const rawFile = files?.file;
     const file: any = Array.isArray(rawFile) ? rawFile[0] : rawFile;
     if (!file) return res.status(400).json({ error: 'File missing' });
 
     const mimetype = file.mimetype || file.type;
-    if (mimetype !== 'application/pdf') return res.status(400).json({ error: 'Only PDF' });
+    if (mimetype !== 'application/pdf') {
+      return res.status(400).json({ error: 'Only PDF' });
+    }
 
-    const buffer = fs.readFileSync(file.filepath || file.path);
+    const filepath = file.filepath || file.path; // formidable v3/v2
+    const buffer = fs.readFileSync(filepath);
 
+    // Nombre YYYY-MM-DD.pdf (sobrescribe si ya existe)
     const today = new Date().toISOString().slice(0, 10);
     const name = `${today}.pdf`;
 
