@@ -1,0 +1,28 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { supabaseServer } from '@/lib/supabaseServer';
+
+const BUCKET = process.env.SUPABASE_BUCKET || 'menus';
+const EXPIRY = parseInt(process.env.SIGNED_URL_EXPIRY || '86400', 10);
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    const { data, error } = await supabaseServer
+      .storage
+      .from(BUCKET)
+      .list('', { limit: 100, sortBy: { column: 'updated_at', order: 'desc' } });
+
+    if (error) throw error;
+    if (!data || data.length === 0) return res.status(200).json({ url: null });
+
+    const latest = data[0];
+    const { data: signed, error: signErr } = await supabaseServer
+      .storage
+      .from(BUCKET)
+      .createSignedUrl(latest.name, EXPIRY);
+
+    if (signErr) throw signErr;
+    return res.status(200).json({ url: signed?.signedUrl || null, name: latest.name });
+  } catch (e:any) {
+    return res.status(500).json({ error: e?.message || 'Server error' });
+  }
+}
