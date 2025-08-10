@@ -6,7 +6,7 @@ import fs from 'fs';
 export const config = { api: { bodyParser: false } };
 
 const BUCKET = process.env.SUPABASE_BUCKET || 'menus';
-const ADMIN_UPLOAD_KEY = process.env.ADMIN_UPLOAD_KEY;
+const ADMIN_UPLOAD_KEY = process.env.ADMIN_UPLOAD_KEY || '';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -22,21 +22,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     });
 
+    // adminKey puede venir como string o string[]
+    const rawKey = fields?.adminKey;
+    const adminKey = Array.isArray(rawKey) ? rawKey[0] : (rawKey ?? '');
+    if (adminKey !== ADMIN_UPLOAD_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
 
-    const adminKey = (fields.adminKey as string) || '';
-    if (adminKey !== ADMIN_UPLOAD_KEY) return res.status(401).json({ error: 'Unauthorized' });
-
-    const file: any = files.file;
+    // file puede venir como File o File[]
+    const rawFile = files?.file;
+    const file: any = Array.isArray(rawFile) ? rawFile[0] : rawFile;
     if (!file) return res.status(400).json({ error: 'File missing' });
-    if (file.mimetype !== 'application/pdf') return res.status(400).json({ error: 'Only PDF' });
 
-    const buffer = fs.readFileSync(file.filepath);
+    const mimetype = file.mimetype || file.type;
+    if (mimetype !== 'application/pdf') return res.status(400).json({ error: 'Only PDF' });
 
-    // Name: YYYY-MM-DD.pdf to keep order
-    const today = new Date().toISOString().slice(0,10);
+    const buffer = fs.readFileSync(file.filepath || file.path);
+
+    const today = new Date().toISOString().slice(0, 10);
     const name = `${today}.pdf`;
 
-    // Upload (overwrite if exists for the same day)
     const { error: upErr } = await supabaseServer
       .storage
       .from(BUCKET)
@@ -45,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (upErr) throw upErr;
 
     return res.status(200).json({ ok: true, name });
-  } catch (e:any) {
+  } catch (e: any) {
     return res.status(500).json({ error: e?.message || 'Upload failed' });
   }
 }
