@@ -1,63 +1,126 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
+// Visor PDF sin barra de herramientas, con zoom y paginación
 export default function PdfViewer({ url }: { url?: string | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  const [pdf, setPdf] = useState<any>(null);
+  const [pageCount, setPageCount] = useState(0);
+  const [page, setPage] = useState(1);
+
+  const [scale, setScale] = useState(1);           // zoom actual
+  const [fitWidth, setFitWidth] = useState(true);  // modo ajustar al ancho
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Cargar documento
   useEffect(() => {
     let cancelled = false;
+
     async function load() {
       if (!url) { setLoading(false); return; }
+
       try {
         const pdfjsLib: any = await import('pdfjs-dist/build/pdf');
-        // Usamos el worker desde CDN para evitar configuraciones extra
+        // Worker desde CDN → cero configuración extra
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           'https://cdn.jsdelivr.net/npm/pdfjs-dist@4/build/pdf.worker.min.js';
 
         const doc = await pdfjsLib.getDocument({ url }).promise;
+        if (cancelled) return;
 
-        if (!containerRef.current) return;
-        containerRef.current.innerHTML = '';
-
-        for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
-          if (cancelled) return;
-          const page = await doc.getPage(pageNum);
-
-          // Ajuste al ancho del contenedor
-          const viewport = page.getViewport({ scale: 1 });
-          const maxWidth = containerRef.current.clientWidth || 900;
-          const scale = maxWidth / viewport.width;
-          const scaled = page.getViewport({ scale });
-
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d')!;
-          canvas.style.width = '100%';
-          canvas.style.display = 'block';
-          canvas.style.borderRadius = '12px';
-          canvas.width = Math.floor(scaled.width);
-          canvas.height = Math.floor(scaled.height);
-
-          await page.render({ canvasContext: ctx, viewport: scaled }).promise;
-
-          const wrapper = document.createElement('div');
-          wrapper.style.margin = '0 0 16px 0';
-          wrapper.appendChild(canvas);
-          containerRef.current.appendChild(wrapper);
-        }
+        setPdf(doc);
+        setPageCount(doc.numPages);
+        setPage(1);
+        setError(null);
       } catch (e: any) {
         setError(e?.message || 'No se pudo cargar el PDF');
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
+
     load();
     return () => { cancelled = true; };
   }, [url]);
 
+  // Render de una página al canvas
+  const renderPage = useCallback(async () => {
+    if (!pdf || !canvasRef.current || !containerRef.current) return;
+
+    const pdfPage = await pdf.getPage(page);
+
+    // calcular escala base
+    const viewport1 = pdfPage.getViewport({ scale: 1 });
+
+    let s = scale;
+    if (fitWidth) {
+      const maxW = containerRef.current.clientWidth || 900;
+      s = maxW / viewport1.width;
+    }
+    const viewport = pdfPage.getViewport({ scale: s });
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d')!;
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+
+    // Limpiar antes de pintar
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    await pdfPage.render({ canvasContext: ctx, viewport }).promise;
+  }, [pdf, page, scale, fitWidth]);
+
+  // Render inicial y cuando cambia tamaño ventana (si está en fitWidth)
+  useEffect(() => { renderPage(); }, [renderPage]);
+  useEffect(() => {
+    if (!fitWidth) return;
+    const onResize = () => renderPage();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [fitWidth, renderPage]);
+
+  // Controles
+  const zoomIn  = () => { setFitWidth(false); setScale(s => Math.min(s + 0.2, 4)); };
+  const zoomOut = () => { setFitWidth(false); setScale(s => Math.max(s - 0.2, 0.4)); };
+  const fit     = () => { setFitWidth(true); setScale(1); };
+  const prev    = () => setPage(p => Math.max(1, p - 1));
+  const next    = () => setPage(p => Math.min(pageCount, p + 1));
+
+  // UI
   if (!url) return <div className="card">PDF no disponible.</div>;
   if (loading) return <div className="card">Cargando PDF…</div>;
   if (error) return <div className="card" style={{borderColor:'#7f1d1d'}}>Error: {error}</div>;
 
-  return <div className="card" ref={containerRef} style={{ padding: 12 }} />;
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div style={{
+        display:'flex', gap:8, alignItems:'center', justifyContent:'space-between',
+        marginBottom:12, flexWrap:'wrap'
+      }}>
+        {/* Navegación */}
+        <div style={{display:'flex', gap:8, alignItems:'center'}}>
+          <button className="button" onClick={prev}  disabled={page<=1}  style={{padding:'6px 10px'}}>◀</button>
+          <span className="muted">Página {page} / {pageCount}</span>
+          <button className="button" onClick={next}  disabled={page>=pageCount} style={{padding:'6px 10px'}}>▶</button>
+        </div>
+        {/* Zoom */}
+        <div style={{display:'flex', gap:8, alignItems:'center'}}>
+          <button className="button" onClick={zoomOut} style={{padding:'6px 10px'}}>−</button>
+          <span className="muted">{fitWidth ? 'Ajustado al ancho' : `${Math.round(scale*100)}%`}</span>
+          <button className="button" onClick={zoomIn}  style={{padding:'6px 10px'}}>+</button>
+          <button className="button" onClick={fit}     style={{padding:'6px 10px'}}>Ajustar</button>
+        </div>
+      </div>
+
+      <div ref={containerRef}>
+        <canvas
+          ref={canvasRef}
+          style={{ width:'100%', height:'auto', borderRadius:12, display:'block', background:'#fff' }}
+        />
+      </div>
+    </div>
+  );
 }
