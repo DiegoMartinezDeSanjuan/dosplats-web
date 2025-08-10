@@ -22,23 +22,44 @@ export default function Home({ url, name, error }: Props) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <Header />
-      <main className="container" style={{display:'grid', gap:'1rem'}}>
+      <main className="container" style={{ display: 'grid', gap: '1rem' }}>
         <p className="muted">{t('tagline')}</p>
-        <h2>{t('latest_menu')}{name ? ` · ${name}` : ''}</h2>
+        <h2>
+          {t('latest_menu')}
+          {name ? ` · ${name}` : ''}
+        </h2>
 
-        {error && <div className="card" style={{borderColor:'#7f1d1d'}}>Error: {error}</div>}
+        {error && (
+          <div className="card" style={{ borderColor: '#7f1d1d' }}>
+            Error: {error}
+          </div>
+        )}
 
-        {url
-          ? (
-            <>
-              <div className="muted">
-                <a href={url} target="_blank" rel="noreferrer">Abrir en pestaña nueva</a>
-              </div>
-              <PdfViewer url={url} />
-            </>
-          )
-          : <div className="card">{t('no_menu')}</div>
-        }
+        {url ? (
+          <>
+            <div className="muted" style={{ display: 'flex', gap: '1rem' }}>
+              <a href={url} target="_blank" rel="noreferrer">
+                {t('open_new_tab')}
+              </a>
+              <a
+                href={url}
+                download={name || 'menu.pdf'}
+                style={{
+                  background: '#2563eb',
+                  color: 'white',
+                  padding: '0.4rem 0.8rem',
+                  borderRadius: '4px',
+                  textDecoration: 'none',
+                }}
+              >
+                {t('download')} {name || 'menu.pdf'}
+              </a>
+            </div>
+            <PdfViewer url={url} name={name || 'menu.pdf'} />
+          </>
+        ) : (
+          <div className="card">{t('no_menu')}</div>
+        )}
       </main>
       <Footer />
     </>
@@ -61,11 +82,12 @@ export async function getServerSideProps({ locale }: { locale: string }) {
 
     if (listErr) throw listErr;
 
-    const pdfs = (data || [])
-      .filter((it: any) => typeof it?.name === 'string' && it.name.toLowerCase().endsWith('.pdf'));
+    const pdfs = (data || []).filter(
+      (it: any) =>
+        typeof it?.name === 'string' && it.name.toLowerCase().endsWith('.pdf')
+    );
 
     if (pdfs.length) {
-      // Ordena por updated_at (desc) i, si empata, per nom (desc)
       pdfs.sort((a: any, b: any) => {
         const ua = a.updated_at ? new Date(a.updated_at).getTime() : 0;
         const ub = b.updated_at ? new Date(b.updated_at).getTime() : 0;
@@ -91,7 +113,9 @@ export async function getServerSideProps({ locale }: { locale: string }) {
   return {
     props: {
       ...(await serverSideTranslations(locale, ['common'])),
-      url, name, error
-    }
+      url,
+      name,
+      error,
+    },
   };
 }
