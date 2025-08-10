@@ -6,23 +6,45 @@ const EXPIRY = parseInt(process.env.SIGNED_URL_EXPIRY || '86400', 10);
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
+    // Lista raíz del bucket (puedes ajustar 'path' si usas subcarpetas)
     const { data, error } = await supabaseServer
       .storage
       .from(BUCKET)
       .list('', { limit: 100, sortBy: { column: 'updated_at', order: 'desc' } });
 
     if (error) throw error;
-    if (!data || data.length === 0) return res.status(200).json({ url: null });
 
-    const latest = data[0];
+    // Filtra solo PDFs y descarta "carpetas" (objects sin .name válido)
+    const pdfs = (data || [])
+      .filter((it: any) => typeof it?.name === 'string' && it.name.toLowerCase().endsWith('.pdf'));
+
+    if (!pdfs.length) {
+      return res.status(200).json({ url: null, name: null, updated_at: null });
+    }
+
+    // Asegurar orden correcto: por updated_at si existe, si no por nombre (YYYY-MM-DD.pdf)
+    pdfs.sort((a: any, b: any) => {
+      const ua = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const ub = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      if (ub !== ua) return ub - ua;                 // updated_at desc
+      return b.name.localeCompare(a.name);           // fallback: nombre desc
+    });
+
+    const latest = pdfs[0];
+
     const { data: signed, error: signErr } = await supabaseServer
       .storage
       .from(BUCKET)
       .createSignedUrl(latest.name, EXPIRY);
 
     if (signErr) throw signErr;
-    return res.status(200).json({ url: signed?.signedUrl || null, name: latest.name });
-  } catch (e:any) {
+
+    return res.status(200).json({
+      url: signed?.signedUrl || null,
+      name: latest.name,
+      updated_at: latest.updated_at || null
+    });
+  } catch (e: any) {
     return res.status(500).json({ error: e?.message || 'Server error' });
   }
 }
