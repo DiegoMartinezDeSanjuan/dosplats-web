@@ -1,0 +1,14 @@
+{
+  "title": "Dos Plats · Menú del día",
+  "tagline": "Cocina de mercado en Lleida. Consulta el menú del día.",
+  "upload": "Subir PDF del menú",
+  "latest_menu": "Menú del día",
+  "no_menu": "Todavía no hay menú disponible.",
+  "choose_file": "Elige el archivo PDF",
+  "admin_key": "Clave de administrador",
+  "submit": "Subir menú",
+  "wrong_key": "Clave incorrecta",
+  "success": "Menú subido correctamente",
+  "loading": "Cargando…",
+  "language": "Idioma"
+}
