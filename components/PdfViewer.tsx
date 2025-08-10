@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-// Visor PDF sin barra de herramientas, con zoom y paginación
-export default function PdfViewer({ url }: { url?: string | null }) {
+type Props = { url?: string | null; name?: string | null };
+
+// Visor PDF sin barra de herramientas, con zoom/paginación y botón Descargar
+export default function PdfViewer({ url, name }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -17,13 +19,10 @@ export default function PdfViewer({ url }: { url?: string | null }) {
   // Cargar documento
   useEffect(() => {
     let cancelled = false;
-
     async function load() {
       if (!url) { setLoading(false); return; }
-
       try {
         const pdfjsLib: any = await import('pdfjs-dist/build/pdf');
-        // Worker desde CDN → cero configuración extra
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           'https://cdn.jsdelivr.net/npm/pdfjs-dist@4/build/pdf.worker.min.js';
 
@@ -40,7 +39,6 @@ export default function PdfViewer({ url }: { url?: string | null }) {
         if (!cancelled) setLoading(false);
       }
     }
-
     load();
     return () => { cancelled = true; };
   }, [url]);
@@ -50,8 +48,6 @@ export default function PdfViewer({ url }: { url?: string | null }) {
     if (!pdf || !canvasRef.current || !containerRef.current) return;
 
     const pdfPage = await pdf.getPage(page);
-
-    // calcular escala base
     const viewport1 = pdfPage.getViewport({ scale: 1 });
 
     let s = scale;
@@ -66,14 +62,12 @@ export default function PdfViewer({ url }: { url?: string | null }) {
     canvas.width = Math.floor(viewport.width);
     canvas.height = Math.floor(viewport.height);
 
-    // Limpiar antes de pintar
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     await pdfPage.render({ canvasContext: ctx, viewport }).promise;
   }, [pdf, page, scale, fitWidth]);
 
-  // Render inicial y cuando cambia tamaño ventana (si está en fitWidth)
   useEffect(() => { renderPage(); }, [renderPage]);
   useEffect(() => {
     if (!fitWidth) return;
@@ -82,14 +76,12 @@ export default function PdfViewer({ url }: { url?: string | null }) {
     return () => window.removeEventListener('resize', onResize);
   }, [fitWidth, renderPage]);
 
-  // Controles
   const zoomIn  = () => { setFitWidth(false); setScale(s => Math.min(s + 0.2, 4)); };
   const zoomOut = () => { setFitWidth(false); setScale(s => Math.max(s - 0.2, 0.4)); };
   const fit     = () => { setFitWidth(true); setScale(1); };
   const prev    = () => setPage(p => Math.max(1, p - 1));
   const next    = () => setPage(p => Math.min(pageCount, p + 1));
 
-  // UI
   if (!url) return <div className="card">PDF no disponible.</div>;
   if (loading) return <div className="card">Cargando PDF…</div>;
   if (error) return <div className="card" style={{borderColor:'#7f1d1d'}}>Error: {error}</div>;
@@ -106,12 +98,25 @@ export default function PdfViewer({ url }: { url?: string | null }) {
           <span className="muted">Página {page} / {pageCount}</span>
           <button className="button" onClick={next}  disabled={page>=pageCount} style={{padding:'6px 10px'}}>▶</button>
         </div>
+
         {/* Zoom */}
         <div style={{display:'flex', gap:8, alignItems:'center'}}>
           <button className="button" onClick={zoomOut} style={{padding:'6px 10px'}}>−</button>
           <span className="muted">{fitWidth ? 'Ajustado al ancho' : `${Math.round(scale*100)}%`}</span>
           <button className="button" onClick={zoomIn}  style={{padding:'6px 10px'}}>+</button>
           <button className="button" onClick={fit}     style={{padding:'6px 10px'}}>Ajustar</button>
+          {/* Descargar (algunos navegadores ignoran download en cross-origin; abrimos en nueva pestaña como fallback) */}
+          <a
+            className="button"
+            href={url}
+            download={name || undefined}
+            target="_blank"
+            rel="noreferrer"
+            style={{padding:'6px 10px', textDecoration:'none', display:'inline-flex', alignItems:'center'}}
+            title="Descargar PDF"
+          >
+            Descargar
+          </a>
         </div>
       </div>
 
