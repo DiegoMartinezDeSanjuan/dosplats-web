@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 type Props = { url?: string | null; name?: string | null };
 
-// Visor PDF sin barra de herramientas, con zoom/paginación y botón Descargar
 export default function PdfViewer({ url, name }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -10,13 +9,11 @@ export default function PdfViewer({ url, name }: Props) {
   const [pdf, setPdf] = useState<any>(null);
   const [pageCount, setPageCount] = useState(0);
   const [page, setPage] = useState(1);
-
-  const [scale, setScale] = useState(1);           // zoom actual
-  const [fitWidth, setFitWidth] = useState(true);  // modo ajustar al ancho
+  const [scale, setScale] = useState(1);
+  const [fitWidth, setFitWidth] = useState(true); // ajuste al ancho por defecto
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Cargar documento
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -25,10 +22,8 @@ export default function PdfViewer({ url, name }: Props) {
         const pdfjsLib: any = await import('pdfjs-dist/build/pdf');
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           'https://cdn.jsdelivr.net/npm/pdfjs-dist@4/build/pdf.worker.min.js';
-
         const doc = await pdfjsLib.getDocument({ url }).promise;
         if (cancelled) return;
-
         setPdf(doc);
         setPageCount(doc.numPages);
         setPage(1);
@@ -43,28 +38,22 @@ export default function PdfViewer({ url, name }: Props) {
     return () => { cancelled = true; };
   }, [url]);
 
-  // Render de una página al canvas
   const renderPage = useCallback(async () => {
     if (!pdf || !canvasRef.current || !containerRef.current) return;
-
     const pdfPage = await pdf.getPage(page);
     const viewport1 = pdfPage.getViewport({ scale: 1 });
-
     let s = scale;
     if (fitWidth) {
       const maxW = containerRef.current.clientWidth || 900;
       s = maxW / viewport1.width;
     }
     const viewport = pdfPage.getViewport({ scale: s });
-
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d')!;
     canvas.width = Math.floor(viewport.width);
     canvas.height = Math.floor(viewport.height);
-
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
     await pdfPage.render({ canvasContext: ctx, viewport }).promise;
   }, [pdf, page, scale, fitWidth]);
 
@@ -78,7 +67,7 @@ export default function PdfViewer({ url, name }: Props) {
 
   const zoomIn  = () => { setFitWidth(false); setScale(s => Math.min(s + 0.2, 4)); };
   const zoomOut = () => { setFitWidth(false); setScale(s => Math.max(s - 0.2, 0.4)); };
-  const fit     = () => { setFitWidth(true); setScale(1); };
+  const fit     = () => { setFitWidth(true); setScale(1); renderPage(); };
   const prev    = () => setPage(p => Math.max(1, p - 1));
   const next    = () => setPage(p => Math.min(pageCount, p + 1));
 
@@ -94,26 +83,23 @@ export default function PdfViewer({ url, name }: Props) {
       }}>
         {/* Navegación */}
         <div style={{display:'flex', gap:8, alignItems:'center'}}>
-          <button className="button" onClick={prev}  disabled={page<=1}  style={{padding:'6px 10px'}}>◀</button>
-          <span className="muted">Página {page} / {pageCount}</span>
-          <button className="button" onClick={next}  disabled={page>=pageCount} style={{padding:'6px 10px'}}>▶</button>
+          <button className="button" onClick={prev} disabled={page<=1}>◀</button>
+          <span className="muted">{page} / {pageCount}</span>
+          <button className="button" onClick={next} disabled={page>=pageCount}>▶</button>
         </div>
 
-        {/* Zoom */}
+        {/* Zoom + Descargar */}
         <div style={{display:'flex', gap:8, alignItems:'center'}}>
-          <button className="button" onClick={zoomOut} style={{padding:'6px 10px'}}>−</button>
-          <span className="muted">{fitWidth ? 'Ajustado al ancho' : `${Math.round(scale*100)}%`}</span>
-          <button className="button" onClick={zoomIn}  style={{padding:'6px 10px'}}>+</button>
-          <button className="button" onClick={fit}     style={{padding:'6px 10px'}}>Ajustar</button>
-          {/* Descargar (algunos navegadores ignoran download en cross-origin; abrimos en nueva pestaña como fallback) */}
+          <button className="button" onClick={zoomOut}>−</button>
+          <button className="button" onClick={zoomIn}>+</button>
+          <button className="button" onClick={fit}>Ajustar</button>
           <a
             className="button"
             href={url}
             download={name || undefined}
             target="_blank"
             rel="noreferrer"
-            style={{padding:'6px 10px', textDecoration:'none', display:'inline-flex', alignItems:'center'}}
-            title="Descargar PDF"
+            style={{textDecoration:'none'}}
           >
             Descargar
           </a>
