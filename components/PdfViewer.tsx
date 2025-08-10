@@ -24,7 +24,7 @@ export default function PdfViewer({ url, name }: Props) {
       try {
         const pdfjsLib: any = await import('pdfjs-dist');
         pdfjsLib.GlobalWorkerOptions.workerSrc =
-          `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+          `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
         const doc = await pdfjsLib.getDocument({ url }).promise;
         if (cancelled) return;
