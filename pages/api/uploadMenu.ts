@@ -15,12 +15,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const form = formidable({ multiples: false, keepExtensions: true });
 
   try {
-    const { fields, files } = await new Promise<{fields: formidable.Fields, files: formidable.Files}>((resolve, reject) => {
+    const { fields, files } = await new Promise<any>((resolve, reject) => {
       form.parse(req, (err, fields, files) => {
         if (err) reject(err);
         else resolve({ fields, files });
       });
     });
+
 
     const adminKey = (fields.adminKey as string) || '';
     if (adminKey !== ADMIN_UPLOAD_KEY) return res.status(401).json({ error: 'Unauthorized' });
