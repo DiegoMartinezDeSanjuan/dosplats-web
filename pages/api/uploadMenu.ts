@@ -26,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const adminKey = (fields.adminKey as string) || '';
     if (adminKey !== ADMIN_UPLOAD_KEY) return res.status(401).json({ error: 'Unauthorized' });
 
-    const file = files.file as formidable.File;
+    const file: any = files.file;
     if (!file) return res.status(400).json({ error: 'File missing' });
     if (file.mimetype !== 'application/pdf') return res.status(400).json({ error: 'Only PDF' });
 
